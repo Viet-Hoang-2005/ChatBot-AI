@@ -1,7 +1,10 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from myChat import handle_query, is_tool_query, general_chat, reset_consultation
+import sys
 import os
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from myChat import handle_query, is_tool_query, general_chat, reset_consultation
 
 app = Flask(__name__)
 CORS(app)  # Cho phép React gọi API
