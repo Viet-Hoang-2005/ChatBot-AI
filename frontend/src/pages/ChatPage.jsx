@@ -9,6 +9,7 @@ import MessageInput from "../components/MessageInput.jsx";
 import SuggestionCard from "../components/SuggestionCard.jsx";
 import ComparisonTable from "../components/ComparisonTable.jsx";
 import Modal from "../components/Modal.jsx";
+import logoImage from '../assets/logo.png';
 
 const LS_KEY = "chat_messages_v1";
 
@@ -64,7 +65,7 @@ function Welcome({ onExampleClick }) {
     <div className="rounded-2xl p-5 sm:p-6">
       {/* Logo + Xin chào */}
       <div className="flex items-center justify-center gap-4 mb-2">
-        <img src="/src/assets/logo.png" alt="Logo" className="w-6 h-6 sm:w-8 sm:h-8" />
+        <img src={logoImage} alt="Logo" className="w-6 h-6 sm:w-8 sm:h-8" />
         <h2 className="text-2xl font-semibold text-white">Xin chào bạn!</h2>
       </div>
       

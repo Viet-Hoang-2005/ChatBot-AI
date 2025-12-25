@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app)  # Cho phép React gọi API
 
 # Endpoint chính để xử lý câu hỏi
-@app.route("/query", methods=["GET"])
+@app.route("/api/query", methods=["GET"])
 def query():
     user_query = request.args.get("q")
 
@@ -40,7 +40,7 @@ def query():
         return jsonify({"error": str(e)}), 500
 
 # Endpoint để reset cuộc hội thoại
-@app.route("/conversation/reset", methods=["POST"])
+@app.route("/api/conversation/reset", methods=["POST"])
 def conversation_reset():
     try:
         msg = reset_consultation()

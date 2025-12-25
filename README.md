@@ -76,11 +76,3 @@ GOOGLE_API_KEY=""
 ```bash
 python app.py
 ```
-- Xem thống kê cache
-```bash
-curl http://localhost:5000/cache/stats
-```
-- Xóa cache
-```bash
-curl "http://localhost:5000/cache/clear" -Method POST
-```
