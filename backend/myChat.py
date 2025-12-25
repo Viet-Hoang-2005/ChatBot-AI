@@ -136,10 +136,10 @@ Câu hỏi: {question}
         try:
             # Gọi AI với structured output
             response = self.model.invoke(self.messages)
-            print("[TOOLS] 💡 Raw response:", response)
+            print("💡 [TOOLS] Raw response:", response)
             # Validate và clean response
             validated_response = self._validate_response(response)
-            print("[TOOLS] ✅ Validated response:", type(validated_response))
+            print("✅ [TOOLS] Validated response:", type(validated_response))
             # Lưu conversation history
             summary = f"Đã tư vấn {len(validated_response['recommended_tools'])} công cụ cho: {question[:50]}..."
             self.messages.append(AIMessage(content=summary))
@@ -259,7 +259,7 @@ YÊU CẦU:
             reply_text = str(resp)
 
         # 
-        print("[CHAT] 💡 Response:", reply_text)
+        print("💡 [CHAT] Response:", reply_text)
 
         # Lưu tiếp đoạn hội thoại này vào self.messages để lần sau còn nhớ
         self.messages.append(HumanMessage(content=question))

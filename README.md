@@ -22,8 +22,6 @@ frontend/
 │   ├── lib/
 │   │   └── api.js                      # Hàm gọi API tới backend
 │   │
-│   ├── services/
-│   │   └── suggest.js                  # Service xử lý gợi ý từ backend
 │   │
 │   ├── assets/                         # Thư mục chứa hình ảnh
 │   │   ├── Avatar

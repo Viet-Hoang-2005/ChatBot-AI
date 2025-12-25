@@ -1,6 +1,6 @@
 // Hàm gọi API backend với hỗ trợ abort
 export async function askTools(query, signal) {
-  const base = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+  const base = import.meta.env.VITE_API_BASE || '/api';
   const url = `${base}/query?q=${encodeURIComponent(query)}`;
 
   const res = await fetch(url, { 
@@ -18,7 +18,7 @@ export async function askTools(query, signal) {
 
 // Hàm gọi API để reset cuộc hội thoại
 export async function resetConversation(signal) {
-  const base = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+  const base = import.meta.env.VITE_API_BASE || '/api';
   const url = `${base}/conversation/reset`;
 
   const res = await fetch(url, {
