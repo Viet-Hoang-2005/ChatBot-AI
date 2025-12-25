@@ -1,0 +1,37 @@
+1.Trello
+2.Github 
+3.Gitlab
+4.Jira software
+5.Google Slides
+6.Canva
+7.Microsoft PowerPoint
+8.Carrd
+9. Google sites
+10. Haravan
+11. Sapo
+12. WordPress + WooCommerce
+13. Behance
+14.Meta Business Suite (Facebook Business Suite)
+15. Notion
+16. Mailchimp
+17. Brevo
+18. MailerLite
+19.Gemini 
+20.ChatPDF
+21.Smallpdf
+22.Jitsi Meet
+23.Skype
+24.Discord
+25.ELSA Speak
+26.ChatGPT 
+27.Duolingo
+28.TickTick
+29.Google Workspace
+30.ManyChat
+31.Tawk
+32.Dialogflow 
+33.Looka
+34.Adobe Express
+35.InVideo
+36.Pictory.AI
+37.Todoist

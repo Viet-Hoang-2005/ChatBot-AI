@@ -1,0 +1,4 @@
+.env
+query_cache.db
+.idea/
+__pycache__/
