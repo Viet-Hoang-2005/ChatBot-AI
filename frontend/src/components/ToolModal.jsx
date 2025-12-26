@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { X } from "lucide-react";
 
-
-export default function Modal({ open, title, iconUrl, link, details, summary, bestFor, onClose}) {
+export default function ToolModal({ open, title, iconUrl, link, details, summary, bestFor, onClose}) {
   const dialogRef = useRef(null);
 
   useEffect(() => {

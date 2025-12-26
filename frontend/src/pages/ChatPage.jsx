@@ -1,26 +1,189 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, Plus} from "lucide-react";
-import { askTools, resetConversation } from "../lib/api.js";
+import { ChevronLeft, History, Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { v4 as uuidv4 } from 'uuid';
 
+// Import API và Components
+import { askTools, getUserSessions, deleteAllHistory, getSessionHistory, renameSession, deleteSession } from "../lib/api.js";
+import HistoryModal from "../components/HistoryModal.jsx";
 import ChatMessage from "../components/ChatMessage.jsx";
 import MessageInput from "../components/MessageInput.jsx";
 import SuggestionCard from "../components/SuggestionCard.jsx";
 import ComparisonTable from "../components/ComparisonTable.jsx";
-import Modal from "../components/Modal.jsx";
+import ToolModal from "../components/ToolModal.jsx";
 import logoImage from '../assets/logo.png';
 
-const LS_KEY = "chat_messages_v1";
+// --- HELPER FUNCTIONS ---
 
-/* Header */
-function Header({ onBackToIntro, onReset, onScrollToBottom }) {
+/* Lấy ngày hiện tại định dạng dd/mm/yyyy */
+function getTodayLabel() {
+  return new Date().toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
+}
+
+/* Hàm lấy giờ từ chuỗi ISO (VD: 2023... -> 14:30) */
+function formatTimeFromISO(isoString) {
+  if (!isoString) return "";
+  
+  const safeIsoString = (isoString.endsWith("Z") || isoString.includes("+")) 
+    ? isoString 
+    : isoString + "Z";
+  const date = new Date(safeIsoString);
+  
+  return date.toLocaleTimeString("vi-VN", { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    timeZone: "Asia/Ho_Chi_Minh", 
+  });
+}
+
+/* Hàm lấy ngày từ chuỗi ISO (VD: 2023... -> 25/12/2025) */
+function formatDateFromISO(isoString) {
+  if (!isoString) return getTodayLabel();
+
+  const safeIsoString = (isoString.endsWith("Z") || isoString.includes("+")) 
+      ? isoString 
+      : isoString + "Z";
+  const date = new Date(safeIsoString);
+
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
+}
+
+/* Map dữ liệu tool từ backend sang format UI */
+function mapToolsForUI(tools = []) {
+  return tools.slice(0, 3).map((t) => {
+    const favicon = t?.url
+      ? `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(t.url)}&size=64`
+      : null;
+
+    return {
+      title: t?.name || "Công cụ",
+      summary: t?.description || null,
+      link: t?.url || null,
+      favicon,
+      details: {
+        overview: [
+          t?.category && `- Nhóm: ${t.category}`,
+          t?.pricing && `- Chi phí: ${t.pricing}`,
+          t?.setup_time && `- Thời gian thiết lập: ${t.setup_time}`,
+          t?.difficulty_level && `- Độ khó: ${t.difficulty_level}`,
+        ].filter(Boolean),
+        advantages: t?.advantages || null,
+        disadvantages: t?.disadvantages || null,
+        quickGuide: t?.quick_guide || null,
+        bestFor: t?.best_for || null,
+      },
+    };
+  });
+}
+
+/* Hàm quan trọng: Chuyển đổi JSON phản hồi từ Bot (mới hoặc lịch sử) 
+  thành mảng các message UI (Lời dẫn -> Thẻ Tool -> Bảng so sánh -> Kết luận)
+*/
+function processBotResponse(data, dateStr) {
+  // Case 1: Bot trả lời chat thường (text)
+  if (data?.mode === "chat") {
+    return [{
+      role: "assistant",
+      content: data.reply || "Xin lỗi, mình chưa có câu trả lời phù hợp.",
+      date: dateStr,
+    }];
+  }
+
+  // Case 2: Bot trả lời gợi ý tool (structure)
+  const uiMessages = [];
+  const tools = Array.isArray(data?.recommended_tools) ? data.recommended_tools : [];
+  const mappedTools = mapToolsForUI(tools);
+
+  // 1. Lời dẫn (Intro)
+  if (data?.intro) {
+    uiMessages.push({
+      role: "assistant",
+      type: "preface",
+      content: data.intro,
+      date: dateStr,
+    });
+  }
+
+  // 2. Các thẻ gợi ý (Suggestion Cards)
+  if (mappedTools.length > 0) {
+    uiMessages.push({
+      role: "assistant",
+      type: "suggestionRow",
+      payload: mappedTools,
+      date: dateStr,
+    });
+  }
+
+  // 3. Bảng so sánh (Comparison Table)
+  if (Array.isArray(data?.comparison) && data.comparison.length) {
+    uiMessages.push({
+      role: "assistant",
+      type: "preface",
+      content: "**So sánh nhanh giữa các lựa chọn:**",
+      date: dateStr,
+    });
+    uiMessages.push({
+      role: "assistant",
+      type: "comparisonTable",
+      tools: mappedTools,
+      comparisons: data.comparison,
+      date: dateStr,
+    });
+  }
+
+  // 4. Kết luận (Recommendation)
+  if (Array.isArray(data?.final_recommendation) && data.final_recommendation.length) {
+    uiMessages.push({
+      role: "assistant",
+      type: "preface",
+      content: "**Kết luận nhanh:**",
+      date: dateStr,
+    });
+    uiMessages.push({
+      role: "assistant",
+      content: data.final_recommendation.join("\n\n"),
+      date: dateStr,
+    });
+  }
+
+  // 5. Các bước tiếp theo (Next Steps)
+  if (Array.isArray(data?.next_steps) && data.next_steps.length) {
+    uiMessages.push({
+      role: "assistant",
+      type: "preface",
+      content: "**Các bước tiếp theo bạn có thể làm:**",
+      date: dateStr,
+    });
+    uiMessages.push({
+      role: "assistant",
+      content: data.next_steps.map((s, i) => `${i + 1}. ${s}`).join("\n"),
+      date: dateStr,
+    });
+  }
+
+  return uiMessages;
+}
+
+// --- COMPONENTS ---
+
+/* Header: Thêm nút History */
+function Header({ onBackToIntro, onReset, onScrollToBottom, onOpenHistory }) {
   return (
     <header className="sticky top-0 z-20">
       <div className="max-w-screen-2xl mx-auto px-5 sm:px-8 py-5">
         <div className="relative flex items-center justify-center rounded-2xl border border-white/10 bg-black/20 backdrop-blur-xl px-5 py-3">
 
-          {/* Button Back */}
           <button
             onClick={onBackToIntro}
             className="absolute left-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur flex items-center justify-center transition-all duration-300 hover:scale-110"
@@ -29,7 +192,6 @@ function Header({ onBackToIntro, onReset, onScrollToBottom }) {
             <ChevronLeft className="w-5 h-5 text-white" />
           </button>
 
-          {/* Title */}
           <span
             onClick={onScrollToBottom}
             className="font-semibold tracking-wide text-white text-center cursor-pointer hover:text-pink-400 transition"
@@ -38,14 +200,25 @@ function Header({ onBackToIntro, onReset, onScrollToBottom }) {
             ChatBot AI gợi ý công cụ học tập
           </span>
 
-          {/* Button Reset */}
-          <button
-            onClick={onReset}
-            className="absolute right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur flex items-center justify-center transition-all duration-300 hover:scale-110"
-            title="Tạo cuộc hội thoại mới"
-          >
-            <Plus className="w-5 h-5 text-white" />
-          </button>
+          <div className="absolute right-4 flex items-center gap-3">
+            {/* Button History */}
+            <button
+              onClick={onOpenHistory}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition hover:scale-110 border border-white/20"
+              title="Lịch sử hội thoại"
+            >
+              <History className="w-5 h-5 text-white" />
+            </button>
+
+            {/* Button Reset/New */}
+            <button
+              onClick={onReset}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur flex items-center justify-center transition-all duration-300 hover:scale-110"
+              title="Tạo cuộc hội thoại mới"
+            >
+              <Plus className="w-5 h-5 text-white" />
+            </button>
+          </div>
 
         </div>
       </div>
@@ -55,7 +228,6 @@ function Header({ onBackToIntro, onReset, onScrollToBottom }) {
 
 /* Khối Welcome */
 function Welcome({ onExampleClick }) {
-  // Prompt minh họa
   const examples = [
     "Tôi muốn lên kế hoạch nội dung và đăng bài tự động",
     "Có app nào kết hợp lịch, việc và ghi chú không?",
@@ -63,20 +235,15 @@ function Welcome({ onExampleClick }) {
   ];
   return (
     <div className="rounded-2xl p-5 sm:p-6">
-      {/* Logo + Xin chào */}
       <div className="flex items-center justify-center gap-4 mb-2">
         <img src={logoImage} alt="Logo" className="w-6 h-6 sm:w-8 sm:h-8" />
         <h2 className="text-2xl font-semibold text-white">Xin chào bạn!</h2>
       </div>
-      
-      {/* Mô tả */}
       <p className="text-sm text-white/80">
         Hãy đưa ra những yêu cầu trong học tập hay làm việc của bạn. 
         Mình sẽ đề xuất những công cụ hữu ích trên Internet, 
         kèm các bước hướng dẫn sử dụng, để đáp ứng nhu cầu của bạn.
       </p>
-
-      {/* Button prompt */}
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
         {examples.map((ex, i) => (
           <button
@@ -92,63 +259,88 @@ function Welcome({ onExampleClick }) {
   );
 }
 
-/* Lấy ngày hiện tại định dạng dd/mm/yyyy */
-function getTodayLabel() {
-  return new Date().toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
+// --- MAIN PAGE ---
 
-/* Trang chat chính */
 export default function ChatPage() {
-  const navigate = useNavigate(); // Điều hướng trang
-  const [messages, setMessages] = useState(() => { // Xem tin nhắn từ localStorage
-    try {
-      return JSON.parse(localStorage.getItem(LS_KEY)) || [];
-    } catch {
-      return [];
+  const navigate = useNavigate();
+
+  // 1. QUẢN LÝ ID (User & Session)
+  // UserID: Lưu trong localStorage để nhớ người dùng
+  const [userId] = useState(() => {
+    let uid = localStorage.getItem("chatbot_user_id");
+    if (!uid) {
+      uid = uuidv4();
+      localStorage.setItem("chatbot_user_id", uid);
     }
+    return uid;
   });
 
-  const [activeSuggestion, setActiveSuggestion] = useState(null); // Tool đang mở modal
-  const [prefillText, setPrefillText] = useState(""); // Text gợi ý cho input
-  const [loading, setLoading] = useState(false); // Trạng thái bot trả lời
-  const [errorText, setErrorText] = useState(""); // Lỗi chung
+  // Xử lý đổi tên
+  const handleRenameSession = async (sid, newTitle) => {
+    try {
+      await renameSession(sid, newTitle);
+      // Load lại danh sách history để cập nhật tên mới
+      const list = await getUserSessions(userId);
+      setSessions(list);
+    } catch (e) {
+      console.error("Lỗi đổi tên:", e);
+    }
+  };
+
+  // Xử lý xóa 1 hội thoại
+  const handleDeleteSession = async (sid) => {
+    if (!confirm("Bạn muốn xóa cuộc hội thoại này?")) return;
+    
+    try {
+      await deleteSession(sid);
+      
+      // Nếu xóa đúng cái đang mở -> Reset về trang trắng
+      if (sid === sessionId) {
+        handleCreateNew();
+      } else {
+        // Nếu xóa cái khác -> Chỉ cần load lại danh sách
+        const list = await getUserSessions(userId);
+        setSessions(list);
+      }
+    } catch (e) {
+      console.error("Lỗi xóa:", e);
+    }
+  };
+
+  // SessionID: Mặc định tạo mới mỗi khi tải lại trang (hoặc có thể lưu nếu muốn)
+  const [sessionId, setSessionId] = useState(() => uuidv4());
+
+  // 2. STATE GIAO DIỆN
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
   
-  const abortControllerRef = useRef(null);  // Ref AbortController để hủy request
-  const scrollRef = useRef(null); // Ref vùng scroll chính
-  const hasMessages = useMemo(() => messages.length > 0, [messages]); // Có tin nhắn hay không
+  // State Modal History
+  const [showHistory, setShowHistory] = useState(false);
+  const [sessions, setSessions] = useState([]);
 
-  const suggestionAnchorRef = useRef(null); // Ref khối gợi ý mới nhất
-  const [shouldScrollToSuggestion, setShouldScrollToSuggestion] = useState(false); // Có nên scroll đến khối gợi ý mới
+  // State Modal Detail Tool
+  const [activeSuggestion, setActiveSuggestion] = useState(null);
+  const [prefillText, setPrefillText] = useState("");
+  const [errorText, setErrorText] = useState("");
 
-  // Cuộn xuống cuối vùng chat
+  // Refs
+  const abortControllerRef = useRef(null);
+  const scrollRef = useRef(null);
+  const hasMessages = useMemo(() => messages.length > 0, [messages]);
+  const suggestionAnchorRef = useRef(null);
+  const [shouldScrollToSuggestion, setShouldScrollToSuggestion] = useState(false);
+
+  // --- EFFECT ---
+
+  // Auto-scroll logic
   function scrollToBottom(behavior = "smooth") {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior,
-    });
+    window.scrollTo({ top: document.body.scrollHeight, behavior });
   }
 
-  // Lưu messages vào localStorage
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(messages));
-  }, [messages]);
-
-  // Auto-scroll khi mới vào trang
-  useEffect(() => {
-    scrollToBottom("smooth");
-  }, []);
-
-  // Auto-scroll khi có tin nhắn đang loading
-  useEffect(() => {
-    if (loading)
-      scrollToBottom("smooth");
+    if (loading) scrollToBottom("smooth");
   }, [loading]);
 
-  // Auto-scroll đến khối gợi ý khi có tin nhắn suggestion mới
   useEffect(() => {
     if (!shouldScrollToSuggestion) return;
     const el = suggestionAnchorRef.current;
@@ -156,251 +348,159 @@ export default function ChatPage() {
       const rect = el.getBoundingClientRect();
       const HEADER_OFFSET = 220;
       const targetY = window.scrollY + rect.top - HEADER_OFFSET;
-
-      window.scrollTo({
-        top: Math.max(0, targetY),
-        behavior: "smooth",
-      });
+      window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
     }
-  setShouldScrollToSuggestion(false);
-}, [shouldScrollToSuggestion, messages]);
+    setShouldScrollToSuggestion(false);
+  }, [shouldScrollToSuggestion, messages]);
 
-  // Cleanup abort controller khi unmount
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      if (abortControllerRef.current) abortControllerRef.current.abort();
     };
   }, []);
 
-  // Hàm reset cuộc hội thoại
-  function handleReset() {
-    // Hủy request đang chạy (nếu có)
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    
-    // Reset UI FE
-    setMessages([]);
-    setActiveSuggestion(null);
-    setErrorText("");
-    setPrefillText("");
-    setLoading(false);
-    
-    // Xoá localStorage
+  // --- HANDLERS LỊCH SỬ ---
+
+  // Mở modal & Load danh sách
+  const handleOpenHistory = async () => {
+    setShowHistory(true);
     try {
-      localStorage.removeItem(LS_KEY);
-    } catch {
-      /* noop */
+      const list = await getUserSessions(userId);
+      setSessions(list);
+    } catch (e) {
+      console.error("Error loading sessions:", e);
     }
+  };
 
-    // Gọi API reset BE
-    resetConversation().catch((err) => {
-    console.error("Reset cuộc hội thoại trên Server thất bại: ", err);
-  });
+  // Tạo mới cuộc trò chuyện
+  const handleCreateNew = () => {
+    setSessionId(uuidv4());
+    setMessages([]);
+    setShowHistory(false);
+    setErrorText("");
+  };
 
-    requestAnimationFrame(() => scrollToBottom("auto"));
-  }
+  // Chọn một cuộc trò chuyện cũ
+  const handleSelectSession = async (sid) => {
+    if (sid === sessionId) {
+      setShowHistory(false);
+      return;
+    }
+    
+    setLoading(true);
+    setShowHistory(false);
+    setMessages([]); // Xóa tạm
+    setErrorText("");
 
-  // Hàm dừng bot phản hồi
+    try {
+      setSessionId(sid);
+      // Lấy dữ liệu thô từ DB
+      const historyData = await getSessionHistory(sid);
+      
+      // Tái tạo lại giao diện từ dữ liệu DB
+      const reconstructedMessages = [];
+
+      historyData.forEach(msg => {
+        // Lấy thời gian thực từ tin nhắn cũ
+        const msgTime = formatTimeFromISO(msg.timestamp); 
+        const msgDate = formatDateFromISO(msg.timestamp);
+
+        if (msg.role === 'user') {
+          reconstructedMessages.push({
+            role: 'user',
+            content: msg.content,
+            date: msgDate,
+            time: msgTime
+          });
+        } else if (msg.role === 'assistant') {
+          // Xử lý nội dung của bot (có thể là text hoặc json object)
+          const botContent = typeof msg.content === 'string' 
+             ? { mode: 'chat', reply: msg.content } // Nếu db lưu string cũ
+             : msg.content; // Nếu db lưu json mới
+          
+          const uiMsgs = processBotResponse(botContent, msgDate);
+          reconstructedMessages.push(...uiMsgs);
+        }
+      });
+
+      setMessages(reconstructedMessages);
+      requestAnimationFrame(() => scrollToBottom("instant")); // Scroll ngay lập tức
+    } catch (e) {
+      console.error("Error restoring session:", e);
+      setErrorText("Không thể tải lại cuộc trò chuyện này.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xóa tất cả
+  const handleDeleteAll = async () => {
+    if (!confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử chat không?")) return;
+    try {
+      await deleteAllHistory(userId);
+      setSessions([]);
+      handleCreateNew();
+    } catch (e) {
+      alert("Xóa thất bại!");
+    }
+  };
+
+  // Hàm dừng bot
   function handleStopBot() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
     setLoading(false);
-    
-    // Thêm tin nhắn thông báo đã dừng
-    const dateStr = getTodayLabel();
     setMessages((prev) => [
       ...prev,
-      {
-        role: "assistant",
-        content: "Đã dừng phản hồi theo yêu cầu của bạn!",
-        date: dateStr,
-      },
+      { role: "assistant", content: "Đã dừng phản hồi.", date: getTodayLabel() },
     ]);
   }
 
-  /* Map dữ liệu tool từ backend */
-  function mapToolsForUI(tools = []) {
-    return tools.slice(0, 3).map((t) => { // Chỉ lấy tối đa 3 tool
-       // Lấy Icon từ Google Favicon service
-      const favicon = t?.url
-        ? `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(
-            t.url
-          )}&size=64`
-        : null;
-
-      return {
-        title: t?.name || "Công cụ", // Tên tool
-        summary: // Mô tả ngắn
-          t?.description || null,
-
-        link: t?.url || null, // Link công cụ
-        favicon, // Icon tool
-
-        details: { // Thông tin chi tiết
-          overview: [
-            t?.category && `- Nhóm: ${t.category}`,
-            t?.pricing && `- Chi phí: ${t.pricing}`,
-            t?.setup_time && `- Thời gian thiết lập: ${t.setup_time}`,
-            t?.difficulty_level && `- Độ khó: ${t.difficulty_level}`,
-          ].filter(Boolean),
-
-          advantages: t?.advantages || null, // Ưu điểm
-          disadvantages: t?.disadvantages || null, // Nhược điểm
-          quickGuide: t?.quick_guide || null, // Hướng dẫn nhanh
-          bestFor: t?.best_for || null, // Phù hợp nhất cho
-        },
-      };
-    });
-  }
-
-  /* Gửi câu hỏi, gọi BE và render */
+  // --- HÀM GỬI TIN NHẮN (Core Logic) ---
   function addUserMessage(text) {
     if (!text || !text.trim()) return;
 
-    // Lấy thời gian hiện tại của user
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const nowISO = new Date().toISOString();
+    const timeStr = formatTimeFromISO(nowISO);
     const dateStr = getTodayLabel();
 
-    // Thêm tin nhắn user và cuộn ngay
+    // 1. Thêm tin nhắn user vào UI ngay
     setMessages((prev) => [
       ...prev,
-      {
-        role: "user",
-        content: text.trim(),
-        time: timeStr,
-        date: dateStr,
-      },
+      { role: "user", content: text.trim(), time: timeStr, date: dateStr },
     ]);
     requestAnimationFrame(() => scrollToBottom("smooth"));
 
-    // Tạo AbortController mới để hủy request nếu cần
+    // 2. Chuẩn bị gọi API
     abortControllerRef.current = new AbortController();
-
     setErrorText("");
     setLoading(true);
 
-    // Gọi BE
-    askTools(text.trim(), abortControllerRef.current.signal)
+    // 3. Gọi Backend với UserID và SessionID
+    askTools(text.trim(), sessionId, userId, abortControllerRef.current.signal)
       .then((data) => {
-        // Case bot trả lời bình thường
-        if (data?.mode === "chat") {
-          const now2 = new Date();
-          const timeStr2 = now2.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content:
-                data.reply ||
-                "Xin lỗi, mình chưa có câu trả lời phù hợp cho câu hỏi này.",
-              time: timeStr2,
-              date: dateStr,
-            },
-          ]);
-          requestAnimationFrame(() => scrollToBottom("smooth"));
-          return;
-        }
-
-        // Case bot trả lời gợi ý tool
-        const tools = Array.isArray(data?.recommended_tools)
-          ? data.recommended_tools
-          : [];
-        const mapped = mapToolsForUI(tools);
-
-        const extra = [];
-
-        if (Array.isArray(data?.comparison) && data.comparison.length) {
-          extra.push({
-            role: "assistant",
-            type: "preface",
-            content: "**So sánh nhanh giữa các lựa chọn:**",
-          });
-          extra.push({
-            role: "assistant",
-            type: "comparisonTable",
-            tools: mapped,
-            comparisons: data.comparison,
-          });
-        }
-
-        if (
-          Array.isArray(data?.final_recommendation) &&
-          data.final_recommendation.length
-        ) {
-          extra.push({
-            role: "assistant",
-            type: "preface",
-            content: "**Kết luận nhanh:**",
-          });
-          extra.push({
-            role: "assistant",
-            content: data.final_recommendation.join("\n\n"),
-          });
-        }
-
-        if (Array.isArray(data?.next_steps) && data.next_steps.length) {
-          extra.push({
-            role: "assistant",
-            type: "preface",
-            content: "**Các bước tiếp theo bạn có thể làm:**",
-          });
-          extra.push({
-            role: "assistant",
-            content: data.next_steps
-              .map((s, i) => `${i + 1}. ${s}`)
-              .join("\n"),
-          });
-        }
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            type: "preface",
-            content: data.intro,
-            date: dateStr,
-          },
-          {
-            role: "assistant",
-            type: "suggestionRow",
-            payload: mapped,
-            date: dateStr,
-          },
-          ...extra.map((m) => ({ ...m, date: dateStr })),
-        ]);
-
-        setShouldScrollToSuggestion(true);
-      })
-
-      .catch((err) => {
-        if (err.name === 'AbortError') {
-          console.log('Request đã bị hủy');
-          return;
-        }
+        // 4. Xử lý phản hồi bằng hàm helper dùng chung
+        const uiMsgs = processBotResponse(data, dateStr);
         
-        setErrorText(err?.message || "Không thể gọi API.");
+        // Thêm vào state
+        setMessages((prev) => [...prev, ...uiMsgs]);
+        
+        // Nếu là tool suggestion thì trigger scroll
+        if (data?.mode !== "chat") {
+          setShouldScrollToSuggestion(true);
+        } else {
+          requestAnimationFrame(() => scrollToBottom("smooth"));
+        }
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        console.error(err);
+        setErrorText("Không thể kết nối với máy chủ.");
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            content:
-              "Xin lỗi, hiện không thể lấy gợi ý từ máy chủ. Hãy thử lại sau.",
-            date: dateStr,
-          },
+          { role: "assistant", content: "Xin lỗi, đã xảy ra lỗi kết nối.", date: dateStr },
         ]);
       })
       .finally(() => {
@@ -409,24 +509,22 @@ export default function ChatPage() {
       });
   }
 
+  // --- RENDER ---
   return (
     <div className="min-h-dvh flex flex-col bg-[#0b0f16] text-white">
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 bg-[radial-gradient(120%_120%_at_0%_100%,rgba(236,72,153,0.18)_0%,transparent_55%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(124,58,237,0.12)_0%,transparent_55%)]"
-      />
+      {/* Background Effects */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 bg-[radial-gradient(120%_120%_at_0%_100%,rgba(236,72,153,0.18)_0%,transparent_55%)]" />
+      <div aria-hidden className="pointer-events-none fixed inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(124,58,237,0.12)_0%,transparent_55%)]" />
 
+      {/* Header */}
       <Header
         onBackToIntro={() => navigate('/')}
-        onReset={handleReset}
+        onReset={handleCreateNew}
         onScrollToBottom={() => scrollToBottom("smooth")}
+        onOpenHistory={handleOpenHistory}
       />
 
-      {/* Khung chính căn giữa */}
+      {/* Main Content */}
       <motion.main
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -435,62 +533,45 @@ export default function ChatPage() {
         ref={scrollRef}
       >
         <div className="max-w-screen-2xl mx-auto px-5 sm:px-8 py-6">
-          {/* Vùng chat căn giữa */}
           <div className="mx-auto w-full max-w-3xl">
+            
             {!hasMessages && (
               <div className="mb-6">
                 <Welcome onExampleClick={(text) => setPrefillText(text)} />
               </div>
             )}
 
+            {/* Render List Messages */}
             {(() => {
               let lastDate = null;
-              
               const lastSuggestionIndex = messages.reduceRight(
-                (acc, msg, index) =>
-                  acc === -1 && msg.type === "suggestionRow" ? index : acc,
-                -1
+                (acc, msg, index) => (acc === -1 && msg.type === "suggestionRow" ? index : acc), -1
               );
 
               return messages.map((m, idx) => {
                 const showDate = m.date && m.date !== lastDate;
                 if (showDate) lastDate = m.date;
 
-                // Thanh ngày tháng năm
                 const dateSeparator = showDate ? (
                   <div key={`date-${idx}`} className="flex items-center my-4">
                     <div className="flex-grow border-t border-white/10" />
-                    <span className="mx-3 text-xs text-gray-400 whitespace-nowrap">
-                      {m.date}
-                    </span>
+                    <span className="mx-3 text-xs text-gray-400 whitespace-nowrap">{m.date}</span>
                     <div className="flex-grow border-t border-white/10" />
                   </div>
                 ) : null;
 
-                // Tin nhắn preface
+                // Render các loại tin nhắn đặc biệt
                 if (m.type === "preface") {
-                  return (
-                    <>
-                      {dateSeparator}
-                      <ChatMessage role="assistant">
-                        {m.content}
-                      </ChatMessage>
-                    </>
-                  );
+                  return <><div key={`sep-${idx}`}>{dateSeparator}</div><ChatMessage key={idx} role="assistant">{m.content}</ChatMessage></>;
                 }
 
-                // Hàng suggestion
                 if (m.type === "suggestionRow") {
                   const items = m.payload || [];
-                  const isLatestSuggestion = idx === lastSuggestionIndex;
-
+                  const isLatest = idx === lastSuggestionIndex;
                   return (
-                    <>
+                    <div key={idx}>
                       {dateSeparator}
-                      <div
-                        className="w-full my-3"
-                        ref={isLatestSuggestion ? suggestionAnchorRef : null}
-                      >
+                      <div className="w-full my-3" ref={isLatest ? suggestionAnchorRef : null}>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           {items.map((s, i) => (
                             <SuggestionCard
@@ -503,43 +584,38 @@ export default function ChatPage() {
                           ))}
                         </div>
                       </div>
-                    </>
+                    </div>
                   );
                 }
 
-                // Bảng so sánh
                 if (m.type === "comparisonTable") {
                   return (
-                    <>
+                    <div key={idx}>
                       {dateSeparator}
                       <div className="w-full my-3">
-                        <ComparisonTable 
-                          tools={m.tools || []} 
-                          comparisonTexts={m.comparisons || []} 
-                        />
+                        <ComparisonTable tools={m.tools || []} comparisonTexts={m.comparisons || []} />
                       </div>
-                    </>
+                    </div>
                   );
                 }
 
-                // Tin nhắn bình thường (user / assistant)
+                // Render tin nhắn thường
                 return (
-                <>
-                  {dateSeparator}
-                  <ChatMessage role={m.role} time={m.time}>
-                    {m.content}
-                  </ChatMessage>
-                </>
-              );
+                  <div key={idx}>
+                    {dateSeparator}
+                    <ChatMessage role={m.role} time={m.time}>
+                      {m.content}
+                    </ChatMessage>
+                  </div>
+                );
               });
             })()}
 
+            {/* Loading Indicator */}
             {loading && (
               <ChatMessage role="assistant">
                 <div className="flex items-center space-x-3">
-                  <span className="text-xs text-gray-400">
-                    Đang xử lí yêu cầu của bạn
-                  </span>
+                  <span className="text-xs text-gray-400">Đang xử lí yêu cầu của bạn</span>
                   <div className="flex items-end space-x-1">
                     <span className="w-2 h-2 rounded-full bg-gray-300/80 animate-bounce [animation-delay:-0.3s]" />
                     <span className="w-2 h-2 rounded-full bg-gray-300/80 animate-bounce [animation-delay:-0.15s]" />
@@ -549,14 +625,13 @@ export default function ChatPage() {
               </ChatMessage>
             )}
 
-            {!!errorText && (
-              <ChatMessage role="assistant">Lỗi: {errorText}</ChatMessage>
-            )}
+            {/* Error Message */}
+            {!!errorText && <ChatMessage role="assistant">Lỗi: {errorText}</ChatMessage>}
           </div>
         </div>
       </motion.main>
 
-      {/* Input cố định dưới */}
+      {/* Input Area */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -573,8 +648,8 @@ export default function ChatPage() {
         </div>
       </motion.div>
 
-      {/* Modal chi tiết tool */}
-      <Modal
+      {/* Modals */}
+      <ToolModal
         open={!!activeSuggestion}
         title={activeSuggestion?.title}
         iconUrl={activeSuggestion?.favicon}
@@ -583,6 +658,18 @@ export default function ChatPage() {
         details={activeSuggestion?.details}
         bestFor={activeSuggestion?.details?.bestFor}
         onClose={() => setActiveSuggestion(null)}
+      />
+
+      <HistoryModal
+        open={showHistory}
+        sessions={sessions}
+        currentSessionId={sessionId}
+        onClose={() => setShowHistory(false)}
+        onSelectSession={handleSelectSession}
+        onCreateNew={handleCreateNew}
+        onDeleteAll={handleDeleteAll}
+        onRename={handleRenameSession} 
+        onDelete={handleDeleteSession}
       />
     </div>
   );

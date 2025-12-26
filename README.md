@@ -46,6 +46,7 @@ npm install lucide-react
 npm install framer-motion
 npm install react-router-dom
 npm install react-markdown
+npm install uuid
 ```
 - Chạy giao diện fe
 ```bash

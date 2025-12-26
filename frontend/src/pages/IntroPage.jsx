@@ -39,10 +39,10 @@ export default function IntroPage() {
               className="relative p-8 sm:p-12 lg:p-16 pl-12 bg-[radial-gradient(80%_70%_at_0%_100%,rgba(236,72,153,0.6)_0%,rgba(236,72,153,0.15)_35%,transparent_70%)] will-change-transform"
             >
               {/* Tiêu đề + mô tả */}
-              <h1 className="text-5xl md:text-6xl font-semibold tracking-tight mb-2">
+              <h1 className="text-5xl md:text-6xl font-semibold tracking-tight mb-4">
                 Cẩm nang số
               </h1>
-              <h2 className="text-pink-400 text-2xl font-semibold mb-6">
+              <h2 className="text-pink-400 text-xl md:text-2xl font-semibold mb-6">
                 ChatBot AI gợi ý công cụ học tập
               </h2>
               <p className="text-base md:text-lg text-white/90 leading-7 max-w-xl mb-8">
