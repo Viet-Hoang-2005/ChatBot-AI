@@ -8,13 +8,3 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(60, 60, 60, 0.75) transparent;
 }
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  overflow-x: hidden;
-}

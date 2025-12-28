@@ -54,7 +54,7 @@ export default function Header() {
                 
                 {/* Underline indicator */}
                 <span
-                  className={`absolute left-0 right-0 -bottom-2 h-0.5 bg-pink-400 transition-all duration-300 ${
+                  className={`absolute left-0 right-0 -bottom-2 h-0.5 bg-pink-400 transition duration-300 will-change-transform ${
                     isActive(item.path)
                       ? "opacity-100 scale-x-100"
                       : "opacity-0 scale-x-0 group-hover:opacity-100 group-hover:scale-x-100"

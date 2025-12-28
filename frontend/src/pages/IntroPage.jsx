@@ -36,7 +36,7 @@ export default function IntroPage() {
               initial={{ opacity: 0, x: -24 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
-              className="relative p-8 sm:p-12 lg:p-16 pl-12 bg-[radial-gradient(80%_70%_at_0%_100%,rgba(236,72,153,0.6)_0%,rgba(236,72,153,0.15)_35%,transparent_70%)] will-change-transform"
+              className="relative p-8 sm:p-12 lg:p-16 pl-12 bg-[radial-gradient(80%_70%_at_0%_100%,rgba(236,72,153,0.6)_0%,rgba(236,72,153,0.15)_35%,transparent_70%)]"
             >
               {/* Tiêu đề + mô tả */}
               <h1 className="text-5xl md:text-6xl font-semibold tracking-tight mb-4">

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { X } from "lucide-react";
+import { X, ExternalLink } from "lucide-react";
 
 export default function ToolModal({ open, title, iconUrl, link, details, summary, bestFor, onClose}) {
   const dialogRef = useRef(null);
@@ -23,14 +23,9 @@ export default function ToolModal({ open, title, iconUrl, link, details, summary
         onClick={onClose}
       />
 
-      <div
-        ref={dialogRef}
-        className="relative z-10 w-full max-w-xl max-h-[85vh] flex flex-col
-                   bg-[#0f1218]/95 backdrop-blur border border-white/10 
-                   rounded-2xl shadow-2xl overflow-hidden"
-      >
+      <div ref={dialogRef} className="relative z-10 w-full max-w-xl max-h-[80vh] flex flex-col bg-[#0f1218] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header cố định */}
-        <div className="flex-shrink-0 px-5 pt-5 pb-3 border-b border-white/10">
+        <div className="flex-shrink-0 px-5 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
           {/* Button đóng modal */}
           <button
             onClick={onClose}
@@ -127,16 +122,17 @@ export default function ToolModal({ open, title, iconUrl, link, details, summary
 
         {/* Footer với link */}
         {link && (
-          <div className="flex-shrink-0 px-5 py-4 border-t border-white/10">
+          <div className="flex-shrink-0 p-4 border-t border-white/10 bg-white/5 flex justify-end">
             <a
               href={link}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center px-4 py-2 rounded-xl
+              className="inline-flex items-center px-4 py-2 gap-2 rounded-xl
                          bg-pink-500 hover:bg-pink-600 text-white 
                          transition text-sm font-semibold"
             >
               Mở trang công cụ
+              <ExternalLink className="w-4 h-4" />
             </a>
           </div>
         )}

@@ -6,14 +6,18 @@ Chatbot AI tìm kiếm và so sánh công cụ trên Internet theo nhu cầu cô
 ```bash
 frontend/
 ├── src/
-│   ├── components/                     # Các component dùng chung
+│   ├── components/
 │   │   ├── ChatMessage.jsx             # Hiển thị bong bóng chat (user/bot)
 │   │   ├── Header.jsx                  # Header chung cho Intro + About + Support
 │   │   ├── MessageInput.jsx            # Ô nhập tin nhắn + nút gửi
-│   │   ├── Modal.jsx                   # Popup chi tiết công cụ
-│   │   └── SuggestionCard.jsx          # Card gợi ý công cụ
+│   │   ├── SuggestionCard.jsx          # Card gợi ý công cụ
+│   │   ├── ComparisonTable.jsx         # Bảng so sánh công cụ
+│   │   ├── ToolModal.jsx               # Popup chi tiết công cụ
+│   │   ├── HistoryModal.jsx            # Popup lịch sử chat
+│   │   ├── ProfileModal.jsx            # Popup hồ sơ người dùng
+│   │   └── CustomSelect.jsx            # Tùy chỉnh select box
 │   │
-│   ├── pages/                          # Các trang chính của ứng dụng
+│   ├── pages/
 │   │   ├── IntroPage.jsx               # Trang bắt đầu
 │   │   ├── ChatPage.jsx                # Trang chatbot AI (logic chính)
 │   │   ├── AboutPage.jsx               # Trang giới thiệu
@@ -23,7 +27,7 @@ frontend/
 │   │   └── api.js                      # Hàm gọi API tới backend
 │   │
 │   │
-│   ├── assets/                         # Thư mục chứa hình ảnh
+│   ├── assets/                         # Thư mục chứa logo, hình ảnh
 │   │   ├── Avatar
 │   │   ├── Background
 │   │   └── Logo
@@ -32,6 +36,7 @@ frontend/
 │   ├── main.jsx                        # Entry point cho Vite
 │   └── styles.css                      # Global styles + Tailwind
 │
+├── .env.local                          # Biến môi trường (API URL)
 ├── postcss.config.js                   # PostCSS config
 ├── tailwind.config.js                  # Tailwind config    
 └── vite.config.js                      # Vite build config
@@ -53,27 +58,26 @@ npm install uuid
 cd chat
 npm run dev
 ```
-## Backend (Flask + FAISS + Google Gemini)
+## Backend (Flask + MongoDB + Google Gemini)
 ### Cấu trúc BE
 ```bash
-backend/
-├── app.py                      # Flask API server (port 5000)
-├── myChat.py                   # Cấu hình json response và call Gemini API
-├── db_storage.py               # Cấu hình cache data lưu prompt và response (FAISS + SQLite)
+api/
+├── index.py                    # Endpoint API chính với Flask
+├── myChat.py                   # Cấu hình chatbot AI với Gemini + LangChain
 ├── requirements.txt            # Các thư viện python cần cài đặt
-├── .env                        # API keys
-└── query_cache.db              # SQLite cache storage (auto-generated)
+└── .env                        # API keys và MongoDB URI
 ```
 ### Chạy BE
 - Cài đặt các thư viện python cần thiết
 ```bash
 python pip install -r requirements.txt
 ```
-- Tạo file .env và đặt Gemini API key
+- Tạo file .env rồi đặt Gemini API key và MongoDB URI
 ```bash
 GOOGLE_API_KEY=""
+MONGODB_URI=""
 ```
 - Chạy server Flask
 ```bash
-python app.py
+python index.py
 ```

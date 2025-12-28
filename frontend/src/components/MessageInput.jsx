@@ -141,7 +141,7 @@ export default function MessageInput({ onSend, onStop, prefill, isLoading }) {
             className={`
               w-10 h-10 flex items-center justify-center rounded-full
               border backdrop-blur
-              transition-all duration-300
+              transition duration-300
               hover:scale-110
               will-change-transform 
               ${isLoading 

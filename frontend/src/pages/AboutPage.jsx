@@ -190,7 +190,7 @@ export default function AboutPage() {
                         >
                           {/* Avatar */}
                           <div className="relative mb-4">
-                            <div className="w-32 h-32 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-white/10 group-hover:border-pink-400 transition-all duration-300 shadow-lg group-hover:shadow-pink-500/50">
+                            <div className="w-32 h-32 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-white/10 group-hover:border-pink-400 transition duration-300 shadow-lg group-hover:shadow-pink-500/50">
                               <img
                                 src={member.avatar}
                                 alt={member.name}
@@ -198,7 +198,7 @@ export default function AboutPage() {
                               />
                             </div>
                             {/* Overlay effect on hover */}
-                            <div className="absolute inset-0 rounded-full bg-pink-500/0 group-hover:bg-pink-500/20 transition-all duration-300" />
+                            <div className="absolute inset-0 rounded-full bg-pink-500/0 group-hover:bg-pink-500/20 transition duration-300" />
                           </div>
 
                           {/* Tên */}
@@ -219,7 +219,7 @@ export default function AboutPage() {
                 {/* Navigation buttons */}
                 <button
                   onClick={handlePrevTeam}
-                  className="absolute left-0 top-1/2 -translate-y-16 sm:-translate-x-2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur flex items-center justify-center transition-all duration-300 hover:scale-110 z-10"
+                  className="absolute left-0 top-1/2 -translate-y-16 sm:-translate-x-2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur flex items-center justify-center transition duration-300 hover:scale-110 z-10"
                   aria-label="Ban trước"
                 >
                   <ChevronLeft className="w-6 h-6 text-white" />
@@ -227,7 +227,7 @@ export default function AboutPage() {
 
                 <button
                   onClick={handleNextTeam}
-                  className="absolute right-0 top-1/2 -translate-y-16 sm:translate-x-2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur flex items-center justify-center transition-all duration-300 hover:scale-110 z-10"
+                  className="absolute right-0 top-1/2 -translate-y-16 sm:translate-x-2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur flex items-center justify-center transition duration-300 hover:scale-110 z-10"
                   aria-label="Ban tiếp theo"
                 >
                   <ChevronRight className="w-6 h-6 text-white" />
@@ -245,7 +245,7 @@ export default function AboutPage() {
                     }}
                     whileHover={{ scale: 1.2 }}
                     whileTap={{ scale: 0.9 }}
-                    className={`h-2 rounded-full transition-all duration-300 ${
+                    className={`h-2 rounded-full transition duration-300 ${
                       index === currentTeamIndex
                         ? "bg-pink-400 w-8"
                         : "bg-white/30 hover:bg-white/50 w-2"
