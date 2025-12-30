@@ -141,7 +141,7 @@ function processBotResponse(data, dateStr) {
 
 /* 2. CÁC COMPONENT CON (UI) */
 // Header của trang Chat
-function Header({ onBackToIntro, onReset, onScrollToBottom, onOpenHistory, onOpenProfile }) {
+function Header({ title, onBackToIntro, onReset, onScrollToBottom, onOpenHistory, onOpenProfile }) {
   return (
     <header className="sticky top-0 z-20">
       <div className="max-w-screen-2xl mx-auto px-5 sm:px-8 py-5">
@@ -159,8 +159,8 @@ function Header({ onBackToIntro, onReset, onScrollToBottom, onOpenHistory, onOpe
           {/* Tiêu đề */}
           <span 
             onClick={onScrollToBottom} 
-            className="font-semibold text-white cursor-pointer hover:text-pink-400 transition">
-              ChatBot AI gợi ý công cụ học tập
+            className="font-semibold text-white cursor-pointer hover:text-pink-400 transition-colors truncate max-w-[50%] sm:max-w-[60%] text-center">
+              {title || "ChatBot AI gợi ý công cụ học tập"}
           </span>
           
           <div className="absolute right-4 flex items-center gap-3">
@@ -240,27 +240,31 @@ export default function ChatPage() {
   const { id } = useParams(); // Lấy ID từ URL (VD: /chat/123 -> id = 123)
 
   /* A. QUẢN LÝ STATE CHUNG */
-  // User ID: Lấy từ LocalStorage hoặc tạo mới 1 lần duy nhất
-  const [userId] = useState(() => {
-    let uid = localStorage.getItem("chatbot_user_id");
-    if (!uid) { 
-      uid = uuidv4(); 
-      localStorage.setItem("chatbot_user_id", uid); 
+  // User ID: Chỉ lấy từ LocalStorage (được cấp bởi IntroPage)
+  const [userId] = useState(() => localStorage.getItem("chatbot_user_id"));
+
+  // Effect bảo vệ: Nếu không có User ID (do user xóa cache hoặc vào thẳng link), quay về Intro
+  useEffect(() => {
+    if (!userId) {
+      console.warn("Chưa tìm thấy User ID, quay về trang Intro!");
+      navigate("/");
     }
-    return uid;
-  });
+  }, [userId, navigate]);
 
   // Session ID: Ưu tiên lấy từ URL, nếu không có thì tạo ID tạm
   const [sessionId, setSessionId] = useState(() => id || uuidv4());
-
+  
   // State dữ liệu
   const [messages, setMessages] = useState([]); // Mảng tin nhắn trong cuộc hội thoại
   const [loading, setLoading] = useState(false); // State loading khi chờ phản hồi từ Bot
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false); // Loading cho History Modal
+  const [isProfileLoading, setIsProfileLoading] = useState(false); // Loading cho Profile Modal
   const [errorText, setErrorText] = useState(""); // Text lỗi chung
-  
+
   // State UI Modals
   const [showHistory, setShowHistory] = useState(false); // Hiện/ẩn lịch sử hội thoại
   const [sessions, setSessions] = useState([]); // Danh sách các session
+  const currentSession = sessions.find(s => s.session_id === sessionId);
   const [activeSuggestion, setActiveSuggestion] = useState(null); // Tool đang mở Modal chi tiết
   const [prefillText, setPrefillText] = useState(""); // Text mẫu để điền sẵn vào Input
 
@@ -461,13 +465,16 @@ export default function ChatPage() {
   // 5. Các hàm xử lý History và Session
   const handleOpenHistory = async () => {
     setShowHistory(true);
+    setIsHistoryLoading(true); // Bắt đầu loading
     try { 
-      const list = await getUserSessions(userId); // Gọi API lấy danh sách session theo User ID
-      setSessions(list); // Cập nhật state sessions
+      const list = await getUserSessions(userId);
+      setSessions(list);
     } 
-    catch (e) {}
+    catch (e) { console.error(e); }
+    finally {
+      setIsHistoryLoading(false); // Kết thúc loading
+    }
   };
-
   const handleDeleteAll = async () => {
     if (!confirm("Xóa tất cả lịch sử?")) return;
     await deleteAllHistory(userId); // Gọi API xóa lịch sử
@@ -495,7 +502,7 @@ export default function ChatPage() {
     } catch (e) {}
   };
 
-    // 6. Hàm Lưu Profile
+  // 6. Hàm Lưu Profile
   const handleSaveProfile = async (data) => {
     try {
       // Cập nhật UI ngay lập tức
@@ -522,12 +529,12 @@ export default function ChatPage() {
     }
   };
 
-  /* 4. CÁC HÀM XỬ LÝ CUỘN TRANG */
+  /* 4. CÁC HÀM XỬ LÝ GIAO DIỆN */
   // Hàm cuộn trang xuống cuối
   const scrollToBottom = (behavior = "smooth") => {
     window.scrollTo({ top: document.body.scrollHeight, behavior });
   };
-  
+
   // Effect: Mỗi khi loading thay đổi -> Cuộn xuống cuối trang
   useEffect(() => { 
     if (loading && messages.length > 0) {
@@ -546,6 +553,21 @@ export default function ChatPage() {
     setShouldScrollToSuggestion(false);
   }, [shouldScrollToSuggestion, messages]);
 
+  // Load Profile từ Server khi vào trang
+  useEffect(() => {
+    if (userId) {
+      setIsProfileLoading(true); // Bắt đầu loading
+      getUserProfile(userId).then(data => {
+        if (data) setUserProfile(data);
+      }).finally(() => {
+        setIsProfileLoading(false); // Kết thúc loading
+      });
+    }
+  }, [userId]);
+
+  // Tiêu đề Header
+  const headerTitle = currentSession ? currentSession.title : "ChatBot AI gợi ý công cụ học tập";
+
   /* 5. RENDER UI CHÍNH */
   return (
     <div className="min-h-dvh flex flex-col bg-[#0b0f16] text-white">
@@ -554,7 +576,8 @@ export default function ChatPage() {
       <div aria-hidden className="pointer-events-none fixed inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(124,58,237,0.12)_0%,transparent_55%)]" />
 
       {/* Header */}
-      <Header 
+      <Header
+        title={headerTitle} 
         onBackToIntro={() => navigate('/')} 
         onReset={handleCreateNew} 
         onScrollToBottom={() => scrollToBottom("smooth")} 
@@ -644,6 +667,7 @@ export default function ChatPage() {
         onClose={() => setShowProfile(false)}
         onSave={handleSaveProfile}
         onDelete={handleDeleteProfile}
+        isLoading={isProfileLoading}
       />
 
       <HistoryModal
@@ -656,6 +680,7 @@ export default function ChatPage() {
         onDeleteAll={handleDeleteAll}
         onRename={handleRenameSession}
         onDelete={handleDeleteSession}
+        isLoading={isHistoryLoading}
       />
     </div>
   );

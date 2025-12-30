@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, MessageSquare, Trash2, Clock, Edit2, Check, Search } from "lucide-react";
+import LoadingSpinner from "./LoadingSpinner.jsx";
 
-export default function HistoryModal({open, sessions, currentSessionId, onSelectSession, onClose, onDeleteAll, onCreateNew, onRename, onDelete}) {
+export default function HistoryModal({open, sessions, currentSessionId, onSelectSession, onClose, onDeleteAll, onCreateNew, onRename, onDelete, isLoading}) {
   const dialogRef = useRef(null);
   
   // State quản lý việc đang sửa cái nào
@@ -92,7 +93,7 @@ export default function HistoryModal({open, sessions, currentSessionId, onSelect
           {/* Header */}
           <div className="flex-shrink-0 px-5 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
             <h3 className="text-lg font-semibold text-white flex items-center gap-3">
-              <Clock className="w-5 h-5 text-pink-500" />
+              <Clock className="w-5 h-5 text-blue-500" />
               Lịch sử trò chuyện
             </h3>
             <button 
@@ -127,8 +128,13 @@ export default function HistoryModal({open, sessions, currentSessionId, onSelect
           </div>
 
           {/* Danh sách (Render filteredSessions thay vì sessions) */}
-          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 custom-scrollbar">
-            {sessions.length === 0 ? (
+          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 custom-scrollbar relative">
+            {isLoading ? (
+               // Hiển thị Spinner khi đang tải
+               <div className="absolute inset-0 flex items-center justify-center">
+                 <LoadingSpinner size="md" color="white" message="Đang load dữ liệu..." />
+               </div>
+            ) : sessions.length === 0 ? (
               // Trường hợp chưa có lịch sử nào
               <div className="h-full flex flex-col items-center justify-center text-gray-500">
                 <MessageSquare className="w-10 h-10 mb-2 opacity-20" />
@@ -141,6 +147,7 @@ export default function HistoryModal({open, sessions, currentSessionId, onSelect
                 Không tìm thấy kết quả "{searchTerm}"
               </div>
             ) : (
+              // Hiển thị danh sách như cũ
               filteredSessions.map((s) => (
                 <div
                   key={s.session_id}
@@ -201,7 +208,7 @@ export default function HistoryModal({open, sessions, currentSessionId, onSelect
             <button onClick={onDeleteAll} disabled={sessions.length === 0} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
               <Trash2 className="w-4 h-4" /> Xóa tất cả
             </button>
-            <button onClick={onCreateNew} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 text-white transition text-sm font-medium shadow-lg shadow-blue-900/20">
+            <button onClick={onCreateNew} className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-80 transition text-sm font-medium shadow-lg shadow-blue-900/20">
               Tạo hội thoại mới
             </button>
           </div>

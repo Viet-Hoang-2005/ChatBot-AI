@@ -1,15 +1,24 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { v4 as uuidv4 } from 'uuid';
 import Header from "../components/Header.jsx";
 import robotImg from "../assets/Background/robot-hands.png";
 
 export default function IntroPage() {
   const navigate = useNavigate();
 
-  // Cuộn lên đầu trang khi component mount
+  // Logic khởi tạo User ID ngay khi vào trang Intro
   useEffect(() => {
+     // Đảm bảo cuộn lên đầu trang khi vào Intro
     window.scrollTo(0, 0);
+
+    // Kiểm tra và tạo User ID nếu chưa có
+    let uid = localStorage.getItem("chatbot_user_id");
+    if (!uid) {
+      uid = uuidv4();
+      localStorage.setItem("chatbot_user_id", uid);
+    }
   }, []);
 
   return (

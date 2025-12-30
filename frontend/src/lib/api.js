@@ -85,3 +85,46 @@ export async function deleteUserProfile(userId) {
     method: "DELETE",
   });
 }
+
+/* 4. API REPORT & REVIEW */
+// Gửi phản hồi từ người dùng
+export async function sendBugReport(data) {
+  const res = await fetch(`${getBaseUrl()}/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return await res.json();
+}
+
+// Gửi hoặc cập nhật đánh giá của user
+export async function sendReview(data) {
+  const res = await fetch(`${getBaseUrl()}/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return await res.json();
+}
+
+// Lấy danh sách đánh giá của user
+export async function getMyReview(userId) {
+  const res = await fetch(`${getBaseUrl()}/reviews/me?user_id=${userId}`);
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+// Xóa đánh giá của user
+export async function deleteReview(userId) {
+  const res = await fetch(`${getBaseUrl()}/reviews?user_id=${userId}`, {
+    method: "DELETE",
+  });
+  return await res.json();
+}
+
+// Lấy danh sách đánh giá của cộng đồng
+export async function getReviews() {
+  const res = await fetch(`${getBaseUrl()}/reviews/list`);
+  if (!res.ok) return [];
+  return await res.json();
+}

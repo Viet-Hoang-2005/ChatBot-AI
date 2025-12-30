@@ -8,7 +8,7 @@ export default function Header() {
   const navItems = [
     { path: "/", label: "HOME" },
     { path: "/about", label: "ABOUT US" },
-    { path: "/support", label: "SERVICE & SUPPORT" },
+    { path: "/support", label: "SUPPORT & FEEDBACK" },
   ];
 
   const isActive = (path) => {

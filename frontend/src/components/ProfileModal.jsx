@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, User, Save, Trash2, Briefcase, Calendar, MapPin, AlignLeft, VenusAndMars } from "lucide-react";
 import CustomSelect from './CustomSelect'; 
+import LoadingSpinner from "./LoadingSpinner.jsx";
 
-export default function ProfileModal({ open, initialData, onClose, onSave, onDelete }) {
+export default function ProfileModal({ open, initialData, onClose, onSave, onDelete, isLoading}) {
   const dialogRef = useRef(null);
   
   // Dữ liệu form mặc định
@@ -96,6 +97,13 @@ export default function ProfileModal({ open, initialData, onClose, onSave, onDel
     }
   }, [open, initialData]);
 
+  // Load data khi mở modal
+  useEffect(() => {
+    if (open && initialData) {
+      setFormData({ ...formData, ...initialData });
+    }
+  }, [open, initialData]);
+
   // Đóng bằng ESC
   useEffect(() => {
     function onKey(e) { 
@@ -158,11 +166,11 @@ export default function ProfileModal({ open, initialData, onClose, onSave, onDel
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div ref={dialogRef} className="relative z-10 w-full max-w-xl max-h-[80vh] flex flex-col bg-[#0f1218] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+      <div ref={dialogRef} className="relative z-10 w-full max-w-xl h-[80vh] flex flex-col bg-[#0f1218] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 px-5 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
           <h3 className="text-lg font-semibold text-white flex items-center gap-3">
-            <User className="w-5 h-5 text-pink-500" />
+            <User className="w-5 h-5 text-green-400" />
             Thông tin người dùng
           </h3>
           <button onClick={onClose} 
@@ -174,109 +182,115 @@ export default function ProfileModal({ open, initialData, onClose, onSave, onDel
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-            {/* Họ tên */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-500"/> Họ và tên
-                </label>
-                <input 
-                    type="text" name="fullName" value={formData.fullName} onChange={handleChange}
-                    placeholder="Điền họ và tên..."
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none hover:border-blue-600/60 transition-colors"
-                />
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
+          {isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#0f1218] z-20">
+              <LoadingSpinner size="md" color="white" message="Đang load dữ liệu..." />
             </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Họ tên */}
+              <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                      <User className="w-4 h-4 text-gray-500"/> Họ và tên
+                  </label>
+                  <input 
+                      type="text" name="fullName" value={formData.fullName} onChange={handleChange}
+                      placeholder="Điền họ và tên..."
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none hover:border-blue-600/60 transition-colors"
+                  />
+              </div>
 
-            {/* Giới tính & Độ tuổi */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <CustomSelect 
-                    label="Giới tính"
-                    icon={VenusAndMars}
-                    value={formData.gender}
-                    options={genders}
-                    onChange={(val) => handleSelectChange("gender", val)}
-                    placeholder="-- Giới tính --"
-                />
+              {/* Giới tính & Độ tuổi */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <CustomSelect 
+                      label="Giới tính"
+                      icon={VenusAndMars}
+                      value={formData.gender}
+                      options={genders}
+                      onChange={(val) => handleSelectChange("gender", val)}
+                      placeholder="-- Giới tính --"
+                  />
 
-                <CustomSelect 
-                    label="Độ tuổi"
-                    icon={Calendar}
-                    value={formData.ageGroup}
-                    options={ageGroups}
-                    onChange={(val) => handleSelectChange("ageGroup", val)}
-                    placeholder="-- Độ tuổi --"
-                />
+                  <CustomSelect 
+                      label="Độ tuổi"
+                      icon={Calendar}
+                      value={formData.ageGroup}
+                      options={ageGroups}
+                      onChange={(val) => handleSelectChange("ageGroup", val)}
+                      placeholder="-- Độ tuổi --"
+                  />
+              </div>
+
+              {/* Quốc gia */}
+              <div className="space-y-2">
+                  <CustomSelect 
+                      label="Quốc gia"
+                      icon={MapPin}
+                      value={formData.country}
+                      options={countries}
+                      onChange={(val) => handleSelectChange("country", val)}
+                      placeholder="-- Chọn quốc gia --"
+                  />
+                  
+                  {formData.country === "Khác" && (
+                      <input 
+                          type="text" name="customCountry" value={formData.customCountry} onChange={handleChange}
+                          placeholder="Nhập tên quốc gia..."
+                          className="w-full mt-2 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white hover:border-blue-600/60 focus:outline-none animate-in fade-in slide-in-from-top-2"
+                      />
+                  )}
+              </div>
+
+              {/* Ngành nghề */}
+              <div className="space-y-2">
+                  <CustomSelect 
+                      label="Ngành nghề / Hiện tại là"
+                      icon={Briefcase}
+                      value={formData.profession}
+                      options={professions}
+                      onChange={(val) => handleSelectChange("profession", val)}
+                      placeholder="-- Chọn nghề nghiệp --"
+                  />
+                  
+                  {formData.profession === "Khác" && (
+                      <input 
+                          type="text" name="customProfession" value={formData.customProfession} onChange={handleChange}
+                          placeholder="Nhập ngành nghề cụ thể..."
+                          className="w-full mt-2 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white hover:border-blue-600/60 focus:outline-none animate-in fade-in slide-in-from-top-2"
+                      />
+                  )}
+              </div>
+
+              {/* Mô tả thêm */}
+              <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                      <AlignLeft className="w-4 h-4 text-gray-500"/> Mô tả bản thân
+                  </label>
+                  <textarea 
+                      name="description" value={formData.description} onChange={handleChange}
+                      rows={3}
+                      placeholder="Sở thích, mục tiêu học tập, phong cách làm việc..."
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white hover:border-blue-600/60 focus:outline-none resize-none"
+                  />
+              </div>
             </div>
-
-            {/* Quốc gia */}
-            <div className="space-y-2">
-                <CustomSelect 
-                    label="Quốc gia"
-                    icon={MapPin}
-                    value={formData.country}
-                    options={countries}
-                    onChange={(val) => handleSelectChange("country", val)}
-                    placeholder="-- Chọn quốc gia --"
-                />
-                
-                {/* Input phụ cho Quốc gia nếu chọn "Khác" */}
-                {formData.country === "Khác" && (
-                     <input 
-                        type="text" name="customCountry" value={formData.customCountry} onChange={handleChange}
-                        placeholder="Nhập tên quốc gia..."
-                        className="w-full mt-2 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white hover:border-blue-600/60 focus:outline-none animate-in fade-in slide-in-from-top-2"
-                    />
-                )}
-            </div>
-
-            {/* Ngành nghề */}
-            <div className="space-y-2">
-                <CustomSelect 
-                    label="Ngành nghề / Hiện tại là"
-                    icon={Briefcase}
-                    value={formData.profession}
-                    options={professions}
-                    onChange={(val) => handleSelectChange("profession", val)}
-                    placeholder="-- Chọn nghề nghiệp --"
-                />
-                
-                {/* Input phụ cho Ngành nghề nếu chọn "Khác" */}
-                {formData.profession === "Khác" && (
-                     <input 
-                        type="text" name="customProfession" value={formData.customProfession} onChange={handleChange}
-                        placeholder="Nhập ngành nghề cụ thể..."
-                        className="w-full mt-2 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white hover:border-blue-600/60 focus:outline-none animate-in fade-in slide-in-from-top-2"
-                    />
-                )}
-            </div>
-
-            {/* Mô tả thêm */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                    <AlignLeft className="w-4 h-4 text-gray-500"/> Mô tả bản thân
-                </label>
-                <textarea 
-                    name="description" value={formData.description} onChange={handleChange}
-                    rows={3}
-                    placeholder="Sở thích, mục tiêu học tập, phong cách làm việc..."
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white hover:border-blue-600/60 focus:outline-none resize-none"
-                />
-            </div>
+          )}
         </div>
 
         {/* Footer Buttons */}
         <div className="flex-shrink-0 p-4 border-t border-white/10 bg-white/5 grid grid-cols-2 gap-4">
             <button
                 onClick={handleDelete}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition text-sm font-medium"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium"
             >
                 <Trash2 className="w-4 h-4" /> Xóa tất cả
             </button>
             <button
                 onClick={handleSave}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 text-white transition text-sm font-medium shadow-lg shadow-pink-900/20"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-green-600 to-cyan-600 hover:opacity-80 transition text-sm font-medium shadow-lg shadow-pink-900/20"
             >
-                <Save className="w-4 h-4" /> Lưu thông tin
+                Lưu thông tin
             </button>
         </div>
       </div>

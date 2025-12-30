@@ -1,5 +1,8 @@
 import sys
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient, DESCENDING
@@ -18,6 +21,8 @@ client = MongoClient(MONGO_URI)
 db = client["chatbot_db"]
 chats_collection = db["conversations"]
 users_collection = db["users"]
+reviews_collection = db["reviews"] 
+reports_collection = db["reports"]
 
 # 1. API ENDPOINTS QUẢN LÝ HỘI THOẠI VÀ TIN NHẮN
 # Endpoint xử lý chat (Lưu User & Bot message)
@@ -160,6 +165,129 @@ def manage_profile():
     if request.method == "DELETE":
         users_collection.update_one({"user_id": user_id}, {"$unset": {"profile": ""}})
         return jsonify({"success": True})
+
+# 4. API ENDPOINT CHO REPORT & REVIEW
+# Endpoint nhận report và gửi email đến Admin
+@app.route("/api/report", methods=["POST"])
+def submit_report():
+    data = request.json
+    title = data.get("title")
+    content = data.get("content")
+    user_id = data.get("user_id", "anonymous")
+
+    if not title or not content:
+        return jsonify({"error": "Vui lòng nhập tiêu đề và nội dung"}), 400
+
+    # Lưu vào DB
+    reports_collection.insert_one({
+        "user_id": user_id,
+        "title": title,
+        "content": content,
+        "created_at": datetime.now(timezone.utc)
+    })
+
+    # Gửi Email
+    SENDER_EMAIL = "tnvhoang2005@gmail.com"
+    SENDER_PASSWORD = os.getenv("MAIL_PASSWORD")
+    RECEIVER_EMAIL = "bopvip114@gmail.com"
+
+    if not SENDER_PASSWORD:
+        print("⚠️ Chưa cấu hình MAIL_PASSWORD trong .env")
+        return jsonify({"success": True, "warning": "Saved but email failed (No Password)"})
+
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = RECEIVER_EMAIL
+        msg["Subject"] = f"[Chatbot Report]: {title}"
+
+        body = f"""
+        <h3>Có báo cáo lỗi từ người dùng!</h3>
+        <p>{content}</p>
+        <br>
+        <p><em>User ID: {user_id}</em></p>
+        """
+        msg.attach(MIMEText(body, "html"))
+
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Email error: {str(e)}")
+        return jsonify({"success": True, "warning": "Email sending failed"})
+
+# Endpoint nhận đánh giá từ người dùng
+@app.route("/api/reviews", methods=["POST"])
+def submit_review():
+    data = request.json
+    rating = data.get("rating")
+    comment = data.get("comment")
+    user_id = data.get("user_id")
+
+    if not rating or not user_id:
+        return jsonify({"error": "Thiếu thông tin đánh giá"}), 400
+
+    # Lấy tên người dùng
+    user_name = "Anonymous"
+    if user_id:
+        user_record = users_collection.find_one({"user_id": user_id})
+        if user_record and "profile" in user_record:
+            user_name = user_record["profile"].get("fullName", "Anonymous")
+
+    # Lưu đánh giá vào DB (Cập nhật nếu user đã đánh giá trước đó)
+    reviews_collection.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "user_name": user_name,
+                "rating": rating,
+                "comment": comment,
+                "created_at": datetime.now(timezone.utc)
+            }
+        },
+        upsert=True
+    )
+    
+    return jsonify({"success": True})
+
+# Endpoint lấy đánh giá của chính người dùng
+@app.route("/api/reviews/me", methods=["GET"])
+def get_my_review():
+    user_id = request.args.get("user_id")
+    if not user_id: return jsonify(None)
+
+    review = reviews_collection.find_one({"user_id": user_id}, {"_id": 0})
+    return jsonify(review if review else None)
+
+# Endpoint xóa đánh giá của chính người dùng
+@app.route("/api/reviews", methods=["DELETE"])
+def delete_review():
+    user_id = request.args.get("user_id")
+    if not user_id: return jsonify({"error": "Missing user_id"}), 400
+
+    result = reviews_collection.delete_one({"user_id": user_id})
+    if result.deleted_count > 0:
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False, "message": "No review found"})
+
+# Endpoint lấy danh sách đánh giá cộng đồng
+@app.route("/api/reviews/list", methods=["GET"])
+def get_reviews():
+    cursor = reviews_collection.find({}, {"_id": 0}).sort("created_at", DESCENDING).limit(20) # Lấy 20 review mới nhất
+    reviews = list(cursor)
+    
+    # Format ngày tháng
+    for r in reviews:
+        if isinstance(r.get("created_at"), datetime):
+            # Chuyển về giờ VN
+            r["created_at"] = r["created_at"].isoformat()
+            
+    return jsonify(reviews)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
