@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Header from "../components/Header.jsx";
 import { motion } from "framer-motion";
 import { Star, Send, Trash2, CheckCircle, AlertCircle, MessageSquare, TriangleAlert, User, Edit3 } from "lucide-react";
-import { sendBugReport, sendReview, getReviews, getMyReview, deleteReview } from "../lib/api.js";
+import { sendBugReport, sendReview, getReviews, getMyReview, deleteReview, initSession } from "../lib/api.js";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
 
 // Helper format ngày
@@ -14,8 +14,8 @@ const formatDate = (isoString) => {
 
 export default function SupportPage() {
   /* 1. KHỞI TẠO CÁC STATE */
-  // Lấy userId từ localStorage hoặc đánh dấu là "anonymous"
-  const userId = localStorage.getItem("chatbot_user_id") || "anonymous";
+  // State lưu User ID chỉ để phục vụ hiển thị (check "Tôi")
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   // State load dữ liệu
   const [isLoading, setIsLoading] = useState(true);
@@ -34,18 +34,32 @@ export default function SupportPage() {
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
   const [reportStatus, setReportStatus] = useState(null);
 
+  // Effect khởi tạo Session và lấy ID để hiển thị
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const sessionData = await initSession();
+        if (sessionData && sessionData.user_id) {
+          setCurrentUserId(sessionData.user_id);
+        }
+      } catch (e) {
+        console.error("Lỗi khởi tạo session:", e);
+      }
+    };
+    init();
+  }, []);
+
   // Load dữ liệu khi vào trang
   useEffect(() => {
     loadAllData();
-  }, [userId]);
+  }, []);
 
   const loadAllData = async () => {
     setIsLoading(true);
     try {
-      // Gọi song song cả 2 API để tiết kiệm thời gian
       const [list, myRev] = await Promise.all([
         getReviews(),
-        getMyReview(userId)
+        getMyReview() 
       ]);
 
       // Cập nhật list cộng đồng
@@ -75,7 +89,7 @@ export default function SupportPage() {
     
     setIsReviewSubmitting(true);
     try {
-      await sendReview({ rating, comment: reviewComment, user_id: userId });
+      await sendReview({ rating, comment: reviewComment });
       await loadAllData();
     } catch (e) {
       alert("Lỗi khi gửi đánh giá");
@@ -90,7 +104,7 @@ export default function SupportPage() {
       if (confirm("Bạn có chắc chắn muốn xóa đánh giá của mình?")) {
         setIsReviewSubmitting(true);
         try {
-          await deleteReview(userId);
+          await deleteReview();
           await loadAllData();
         } catch (e) {
           alert("Lỗi khi xóa đánh giá");
@@ -110,7 +124,7 @@ export default function SupportPage() {
     setIsReportSubmitting(true);
     setReportStatus(null);
     try {
-      const res = await sendBugReport({ title: reportTitle, content: reportContent, user_id: userId });
+      const res = await sendBugReport({ title: reportTitle, content: reportContent });
       if (res.success) {
         setReportStatus("success");
         setReportTitle("");
@@ -301,7 +315,7 @@ export default function SupportPage() {
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar relative" style={{ maxHeight: '600px', minHeight: '200px' }}>
                 {isLoading ? (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <LoadingSpinner message="Đang tải danh sách..." size="lg" color="violet" />
+                    <LoadingSpinner message="Đang load dữ liệu..." size="lg" color="white" />
                   </div>
                 ) : reviewsList.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-gray-500">
@@ -311,16 +325,17 @@ export default function SupportPage() {
                 ) : (
                   <div className="space-y-4">
                     {reviewsList.map((review, idx) => (
-                      <div key={idx} className={`rounded-2xl p-4 border ${review.user_id === userId ? "bg-pink-500/10 border-pink-500/30" : "bg-white/5 border-white/5"}`}>
+                      <div key={idx} className={`rounded-2xl p-4 border ${review.user_id === currentUserId ? "bg-pink-500/10 border-pink-500/30" : "bg-white/5 border-white/5"}`}>
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border border-white/10 ${review.user_id === userId ? "bg-pink-500/20" : "bg-gradient-to-br from-pink-500/20 to-violet-500/20"}`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border border-white/10 ${review.user_id === currentUserId ? "bg-pink-500/20" : "bg-gradient-to-br from-pink-500/20 to-violet-500/20"}`}>
                               <User size={14} className="text-white/70" />
                             </div>
                             <div>
                               <p className="text-sm font-semibold text-white flex items-center gap-2">
                                   {review.user_name || "Anonymous"}
-                                  {review.user_id === userId && <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">Tôi</span>}
+                                  {/* So sánh với ID lấy từ session cookie */}
+                                  {review.user_id === currentUserId && <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">Tôi</span>}
                               </p>
                               <p className="text-xs text-gray-500">{formatDate(review.created_at)}</p>
                             </div>

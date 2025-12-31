@@ -1,11 +1,54 @@
 // Lấy URL cơ sở (Mặc định là /api để khớp với backend)
 const getBaseUrl = () => import.meta.env.VITE_API_BASE || '/api';
 
+// Biến lưu tạm User ID trong bộ nhớ (RAM)
+let memoryUserId = null;
+
+// Hàm helper để tạo headers có kèm ID dự phòng
+const getHeaders = (customHeaders = {}) => {
+  const headers = { 
+    "Content-Type": "application/json",
+    ...customHeaders 
+  };
+  // Nếu có ID trong bộ nhớ, đính kèm vào Header để Backend đọc dự phòng
+  if (memoryUserId) {
+    headers["X-Chatbot-User-ID"] = memoryUserId;
+  }
+  return headers;
+};
+
+// Hàm khởi tạo session
+export async function initSession() {
+  try {
+    const res = await fetch(`${getBaseUrl()}/auth/init`, {
+      method: "POST",
+      headers: getHeaders(),
+      credentials: "include", 
+    });
+    const data = await res.json();
+    
+    // Lưu ID vào bộ nhớ tạm
+    if (data.success && data.user_id) {
+      memoryUserId = data.user_id;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Init session failed", error);
+    return null;
+  }
+}
+
 /* 1. API CHAT */
 // Gửi tin nhắn và nhận phản hồi từ API
-export async function askTools(query, sessionId, userId, signal) {
-  const url = `${getBaseUrl()}/chat?q=${encodeURIComponent(query)}&session_id=${sessionId}&user_id=${userId}`;
-  const res = await fetch(url, { method: 'GET', signal });
+export async function askTools(query, sessionId, signal) {
+  const url = `${getBaseUrl()}/chat?q=${encodeURIComponent(query)}&session_id=${sessionId}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: getHeaders(),
+    signal,
+    credentials: "include"
+  });
   if (!res.ok) throw new Error('API Error');
   return res.json();
 }
@@ -14,7 +57,7 @@ export async function askTools(query, sessionId, userId, signal) {
 export async function resetSessionContext(sessionId) {
   const res = await fetch(`${getBaseUrl()}/chat/reset`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ session_id: sessionId })
   });
   return res.json();
@@ -22,15 +65,20 @@ export async function resetSessionContext(sessionId) {
 
 /* 2. API SESSIONS (QUẢN LÝ HỘI THOẠI) */
 // Lấy danh sách hội thoại
-export async function getUserSessions(userId) {
-  const res = await fetch(`${getBaseUrl()}/sessions?user_id=${userId}`);
+export async function getUserSessions() {
+  const res = await fetch(`${getBaseUrl()}/sessions`, {
+    headers: getHeaders(),
+    credentials: "include"
+  });
   if (!res.ok) return [];
   return res.json();
 }
 
 // Lấy chi tiết tin nhắn (History)
 export async function getSessionHistory(sessionId) {
-  const res = await fetch(`${getBaseUrl()}/sessions/${sessionId}`);
+  const res = await fetch(`${getBaseUrl()}/sessions/${sessionId}`, {
+    headers: getHeaders()
+  });
   if (!res.ok) return [];
   return res.json();
 }
@@ -39,7 +87,7 @@ export async function getSessionHistory(sessionId) {
 export async function renameSession(sessionId, newTitle) {
   const res = await fetch(`${getBaseUrl()}/sessions/${sessionId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ title: newTitle })
   });
   return res.json();
@@ -48,50 +96,59 @@ export async function renameSession(sessionId, newTitle) {
 // Xóa 1 hội thoại
 export async function deleteSession(sessionId) {
   const res = await fetch(`${getBaseUrl()}/sessions/${sessionId}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   });
   return res.json();
 }
 
 // Xóa tất cả hội thoại
-export async function deleteAllHistory(userId) {
-  const res = await fetch(`${getBaseUrl()}/sessions?user_id=${userId}`, {
-    method: 'DELETE'
+export async function deleteAllHistory() {
+  const res = await fetch(`${getBaseUrl()}/sessions`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+    credentials: "include"
   });
   return res.json();
 }
 
 /* 3. API PROFILE */
 // Lấy thông tin cá nhân
-export async function getUserProfile(userId) {
-  const res = await fetch(`${getBaseUrl()}/profile?user_id=${userId}`);
+export async function getUserProfile() {
+  const res = await fetch(`${getBaseUrl()}/profile`, {
+    headers: getHeaders(),
+    credentials: "include"
+  });
   if (!res.ok) return null;
   return await res.json();
 }
 
 // Lưu thông tin cá nhân
-export async function saveUserProfile(userId, profileData) {
+export async function saveUserProfile(profileData) {
   const res = await fetch(`${getBaseUrl()}/profile`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: userId, profile: profileData }),
+    credentials: "include",
+    headers: getHeaders(),
+    body: JSON.stringify({ profile: profileData }),
   });
   return await res.json();
 }
 
 // Xóa thông tin cá nhân
-export async function deleteUserProfile(userId) {
-  await fetch(`${getBaseUrl()}/profile?user_id=${userId}`, {
+export async function deleteUserProfile() {
+  await fetch(`${getBaseUrl()}/profile`, {
     method: "DELETE",
+    headers: getHeaders(),
+    credentials: "include"
   });
 }
 
 /* 4. API REPORT & REVIEW */
-// Gửi phản hồi từ người dùng
+// Gửi báo lỗi từ người dùng
 export async function sendBugReport(data) {
   const res = await fetch(`${getBaseUrl()}/report`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders(),
     body: JSON.stringify(data),
   });
   return await res.json();
@@ -101,30 +158,37 @@ export async function sendBugReport(data) {
 export async function sendReview(data) {
   const res = await fetch(`${getBaseUrl()}/reviews`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders(),
     body: JSON.stringify(data),
   });
   return await res.json();
 }
 
 // Lấy danh sách đánh giá của user
-export async function getMyReview(userId) {
-  const res = await fetch(`${getBaseUrl()}/reviews/me?user_id=${userId}`);
+export async function getMyReview() {
+  const res = await fetch(`${getBaseUrl()}/reviews/me`, {
+    headers: getHeaders(),
+    credentials: "include"
+  });
   if (!res.ok) return null;
   return await res.json();
 }
 
 // Xóa đánh giá của user
-export async function deleteReview(userId) {
-  const res = await fetch(`${getBaseUrl()}/reviews?user_id=${userId}`, {
+export async function deleteReview() {
+  const res = await fetch(`${getBaseUrl()}/reviews`, {
     method: "DELETE",
+    headers: getHeaders(),
+    credentials: "include"
   });
   return await res.json();
 }
 
 // Lấy danh sách đánh giá của cộng đồng
 export async function getReviews() {
-  const res = await fetch(`${getBaseUrl()}/reviews/list`);
+  const res = await fetch(`${getBaseUrl()}/reviews/list`, {
+    headers: getHeaders()
+  });
   if (!res.ok) return [];
   return await res.json();
 }

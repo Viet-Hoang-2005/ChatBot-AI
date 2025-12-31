@@ -1,9 +1,10 @@
 import sys
 import os
+import uuid
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from pymongo import MongoClient, DESCENDING
 from datetime import datetime, timezone
@@ -12,8 +13,10 @@ from datetime import datetime, timezone
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from myChat import handle_query, is_tool_query, general_chat, reset_consultation
 
+#  Lấy URL Frontend từ biến môi trường nếu không thì lấy localhost
 app = Flask(__name__)
-CORS(app)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+CORS(app, supports_credentials=True, origins=[FRONTEND_URL])
 
 # Cấu hình MongoDB
 MONGO_URI = os.getenv("MONGO_URI")
@@ -24,6 +27,64 @@ users_collection = db["users"]
 reviews_collection = db["reviews"] 
 reports_collection = db["reports"]
 
+# 0. API ENDPOINT KHỞI TẠO SESSION VÀ USER
+@app.route("/api/auth/init", methods=["POST"])
+def init_session():
+    # 1 Kiểm tra xem user đã có cookie user_id chưa
+    user_id = request.cookies.get("chatbot_user_id")
+    
+    # 2 Nếu không có Cookie, kiểm tra Header (được gửi từ biến nhớ Frontend)
+    if not user_id:
+        user_id = request.headers.get("X-Chatbot-User-ID")
+
+    if not user_id:
+        # Nếu cả 2 đều không có -> Tạo mới hoàn toàn
+        user_id = str(uuid.uuid4())
+        is_new = True
+    else:
+        # Nếu tìm thấy (từ cookie hoặc header) -> Giữ nguyên ID cũ
+        is_new = False
+    
+    # Tạo response
+    response = make_response(jsonify({"success": True, "user_id": user_id, "is_new": is_new}))
+    
+    is_production = os.getenv("FLASK_ENV") == "production"
+
+    # [BẢO MẬT] Set HttpOnly Cookie
+    # max_age: Thời gian sống của cookie (ví dụ 1 năm)
+    # httponly=True: JS không đọc được (Chống XSS)
+    # samesite='Lax' hoặc 'None': Cấu hình gửi chéo domain (Với Vercel rewrite thì dùng Lax là ổn)
+    # secure=True: Chỉ gửi qua HTTPS (Bắt buộc nếu samesite='None' hoặc deploy thật)
+    response.set_cookie(
+        "chatbot_user_id",
+        user_id,
+        max_age=31536000,
+        httponly=True,
+        samesite='None' if is_production else 'Lax',
+        secure=True if is_production else False
+    )
+    
+    return response
+
+# Helper function để lấy User ID an toàn
+def get_user_id():
+    # Ưu tiên lấy từ Cookie
+    user_id = request.cookies.get("chatbot_user_id")
+    
+    # Nếu không có Cookie, thử lấy từ Header tùy chỉnh (dự phòng cho app/dev)
+    if not user_id:
+        user_id = request.headers.get("X-Chatbot-User-ID")
+    
+    # Fallback: Nếu không có cookie thì thử lấy từ params (để debug)
+    if not user_id:
+        user_id = request.args.get("user_id")
+        if not user_id:
+            data = request.get_json(silent=True)
+            if data and isinstance(data, dict):
+                user_id = data.get("user_id")
+    
+    return user_id
+
 # 1. API ENDPOINTS QUẢN LÝ HỘI THOẠI VÀ TIN NHẮN
 # Endpoint xử lý chat (Lưu User & Bot message)
 @app.route("/api/chat", methods=["GET"])
@@ -31,7 +92,7 @@ def query():
     # Lấy tham số
     user_query = request.args.get("q")
     session_id = request.args.get("session_id")
-    user_id = request.args.get("user_id")
+    user_id = get_user_id()
 
     # Kiểm tra tham số
     if not session_id: session_id = "default_session"
@@ -94,7 +155,7 @@ def conversation_reset():
 # Endpoint lấy danh sách hoặc xóa tất cả sessions của User
 @app.route("/api/sessions", methods=["GET", "DELETE"])
 def manage_sessions():
-    user_id = request.args.get("user_id")
+    user_id = get_user_id()
     if not user_id: return jsonify({"error": "Missing user_id"}), 400
 
     # GET: Lấy danh sách
@@ -143,7 +204,7 @@ def session_detail(session_id):
 # Endpoint quản lý hồ sơ người dùng (Lấy, Cập nhật, Xóa)
 @app.route("/api/profile", methods=["GET", "POST", "DELETE"])
 def manage_profile():
-    user_id = request.args.get("user_id") or (request.json and request.json.get("user_id"))
+    user_id = get_user_id()
     if not user_id: return jsonify({"error": "Missing user_id"}), 400
 
     # GET: Lấy profile
@@ -173,7 +234,7 @@ def submit_report():
     data = request.json
     title = data.get("title")
     content = data.get("content")
-    user_id = data.get("user_id", "anonymous")
+    user_id = get_user_id()
 
     if not title or not content:
         return jsonify({"error": "Vui lòng nhập tiêu đề và nội dung"}), 400
@@ -226,7 +287,7 @@ def submit_review():
     data = request.json
     rating = data.get("rating")
     comment = data.get("comment")
-    user_id = data.get("user_id")
+    user_id = get_user_id()
 
     if not rating or not user_id:
         return jsonify({"error": "Thiếu thông tin đánh giá"}), 400
@@ -257,7 +318,7 @@ def submit_review():
 # Endpoint lấy đánh giá của chính người dùng
 @app.route("/api/reviews/me", methods=["GET"])
 def get_my_review():
-    user_id = request.args.get("user_id")
+    user_id = get_user_id()
     if not user_id: return jsonify(None)
 
     review = reviews_collection.find_one({"user_id": user_id}, {"_id": 0})
@@ -266,7 +327,7 @@ def get_my_review():
 # Endpoint xóa đánh giá của chính người dùng
 @app.route("/api/reviews", methods=["DELETE"])
 def delete_review():
-    user_id = request.args.get("user_id")
+    user_id = get_user_id()
     if not user_id: return jsonify({"error": "Missing user_id"}), 400
 
     result = reviews_collection.delete_one({"user_id": user_id})

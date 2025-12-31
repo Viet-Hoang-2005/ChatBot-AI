@@ -159,7 +159,7 @@ function Header({ title, onBackToIntro, onReset, onScrollToBottom, onOpenHistory
           {/* Tiêu đề */}
           <span 
             onClick={onScrollToBottom} 
-            className="font-semibold text-white cursor-pointer hover:text-pink-400 transition-colors truncate max-w-[50%] sm:max-w-[60%] text-center">
+            className="font-semibold text-white cursor-pointer hover:text-pink-400 transition-colors truncate max-w-[40%] sm:max-w-[50%] text-center">
               {title || "ChatBot AI gợi ý công cụ học tập"}
           </span>
           
@@ -240,17 +240,6 @@ export default function ChatPage() {
   const { id } = useParams(); // Lấy ID từ URL (VD: /chat/123 -> id = 123)
 
   /* A. QUẢN LÝ STATE CHUNG */
-  // User ID: Chỉ lấy từ LocalStorage (được cấp bởi IntroPage)
-  const [userId] = useState(() => localStorage.getItem("chatbot_user_id"));
-
-  // Effect bảo vệ: Nếu không có User ID (do user xóa cache hoặc vào thẳng link), quay về Intro
-  useEffect(() => {
-    if (!userId) {
-      console.warn("Chưa tìm thấy User ID, quay về trang Intro!");
-      navigate("/");
-    }
-  }, [userId, navigate]);
-
   // Session ID: Ưu tiên lấy từ URL, nếu không có thì tạo ID tạm
   const [sessionId, setSessionId] = useState(() => id || uuidv4());
   
@@ -280,6 +269,21 @@ export default function ChatPage() {
   const [shouldScrollToSuggestion, setShouldScrollToSuggestion] = useState(false); // State trigger scroll tới gợi ý
 
   /* B. LOGIC ROUTER */
+  // 0. Tự động khởi tạo Session (Cấp Cookie) nếu chưa có khi vào trang Chat
+  useEffect(() => {
+    const ensureSession = async () => {
+      try {
+        await initSession(); // Gọi API để Backend set cookie nếu chưa có
+        // Sau khi đảm bảo có cookie thì mới load danh sách session cũ
+        const list = await getUserSessions();
+        setSessions(list);
+      } catch (e) {
+        console.error("Lỗi khởi tạo session:", e);
+      }
+    };
+    ensureSession();
+  }, []);
+  
   // 1. Hàm load dữ liệu từ API
   const loadSessionData = async (sid) => {
     setLoading(true); 
@@ -368,23 +372,24 @@ export default function ChatPage() {
   useEffect(() => {
     const initData = async () => {
         try {
-            const list = await getUserSessions(userId); // Gọi API lấy danh sách session theo User ID
+            const list = await getUserSessions(); // Gọi API lấy danh sách session
             setSessions(list); // Cập nhật state sessions
         } catch (e) { 
           console.error(e); 
         }
     };
     initData();
-  }, [userId]);
+  }, []);
 
   // 5. Load Profile từ Server khi vào trang
   useEffect(() => {
-    if (userId) {
-      getUserProfile(userId).then(data => {
-        if (data) setUserProfile(data);
-      });
-    }
-  }, [userId]);
+    setIsProfileLoading(true); 
+    getUserProfile().then(data => {
+      if (data) setUserProfile(data);
+    }).finally(() => {
+      setIsProfileLoading(false); 
+    });
+  }, []);
   
   /* C. CÁC HÀM TƯƠNG TÁC (HANDLERS) */
   // 1. Xử lý tạo mới -> Chỉ cần đổi URL về /chat
@@ -423,7 +428,7 @@ export default function ChatPage() {
     setErrorText("");
 
     // Gọi API gửi tin nhắn và nhận phản hồi từ Bot
-    askTools(text.trim(), sessionId, userId, abortControllerRef.current.signal)
+    askTools(text.trim(), sessionId, abortControllerRef.current.signal)
       .then(data => {
         const uiMsgs = processBotResponse(data, nowStr); // Xử lý phản hồi từ Bot thành các tin nhắn UI
         setMessages(prev => [...prev, ...uiMsgs]); // Cập nhật state messages với các tin nhắn từ Bot
@@ -467,7 +472,8 @@ export default function ChatPage() {
     setShowHistory(true);
     setIsHistoryLoading(true); // Bắt đầu loading
     try { 
-      const list = await getUserSessions(userId);
+      // Lấy lại danh sách session mới nhất
+      const list = await getUserSessions();
       setSessions(list);
     } 
     catch (e) { console.error(e); }
@@ -477,7 +483,7 @@ export default function ChatPage() {
   };
   const handleDeleteAll = async () => {
     if (!confirm("Xóa tất cả lịch sử?")) return;
-    await deleteAllHistory(userId); // Gọi API xóa lịch sử
+    await deleteAllHistory(); // Gọi API xóa lịch sử
     setSessions([]);
     navigate('/chat'); // Về trang Chat chính
   };
@@ -485,7 +491,7 @@ export default function ChatPage() {
   const handleRenameSession = async (sid, newTitle) => {
     try {
       await renameSession(sid, newTitle); // Gọi API đổi tên session
-      const list = await getUserSessions(userId); // Lấy lại danh sách session mới
+      const list = await getUserSessions(); // Lấy lại danh sách session mới
       setSessions(list); // Cập nhật state sessions
     } catch (e) {}
   };
@@ -496,7 +502,7 @@ export default function ChatPage() {
       await deleteSession(sid);
       if (sid === id) navigate('/chat'); // Nếu xóa trang hiện tại -> Về trang chủ
       else { // Ngược lại chỉ cần load lại danh sách session
-        const list = await getUserSessions(userId);
+        const list = await getUserSessions();
         setSessions(list);
       }
     } catch (e) {}
@@ -510,7 +516,7 @@ export default function ChatPage() {
       setShowProfile(false); 
       
       // Gửi xuống Server lưu vào DB
-      await saveUserProfile(userId, data);
+      await saveUserProfile(data);
       console.log("Đã lưu profile lên DB");
     } catch (e) {
       console.error("Lỗi khi lưu profile:", e);
@@ -522,7 +528,7 @@ export default function ChatPage() {
   const handleDeleteProfile = async () => {
     try {
       setUserProfile(null); // Xóa UI
-      await deleteUserProfile(userId); // Xóa DB
+      await deleteUserProfile(); // Xóa DB
       console.log("Đã xóa profile trên DB");
     } catch (e) {
       console.error("Lỗi khi xóa profile:", e);
@@ -552,18 +558,6 @@ export default function ChatPage() {
     }
     setShouldScrollToSuggestion(false);
   }, [shouldScrollToSuggestion, messages]);
-
-  // Load Profile từ Server khi vào trang
-  useEffect(() => {
-    if (userId) {
-      setIsProfileLoading(true); // Bắt đầu loading
-      getUserProfile(userId).then(data => {
-        if (data) setUserProfile(data);
-      }).finally(() => {
-        setIsProfileLoading(false); // Kết thúc loading
-      });
-    }
-  }, [userId]);
 
   // Tiêu đề Header
   const headerTitle = currentSession ? currentSession.title : "ChatBot AI gợi ý công cụ học tập";

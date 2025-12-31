@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from 'uuid';
+import { initSession } from "../lib/api.js";
 import Header from "../components/Header.jsx";
 import robotImg from "../assets/Background/robot-hands.png";
 
@@ -13,12 +14,16 @@ export default function IntroPage() {
      // Đảm bảo cuộn lên đầu trang khi vào Intro
     window.scrollTo(0, 0);
 
-    // Kiểm tra và tạo User ID nếu chưa có
-    let uid = localStorage.getItem("chatbot_user_id");
-    if (!uid) {
-      uid = uuidv4();
-      localStorage.setItem("chatbot_user_id", uid);
-    }
+    // Gọi Server để thiết lập Cookie an toàn
+    const setupSession = async () => {
+        try {
+            await initSession();
+            console.log("Session initialized securely via HttpOnly Cookie");
+        } catch (e) {
+            console.error("Failed to init session", e);
+        }
+    };
+    setupSession();
   }, []);
 
   return (
